@@ -95,7 +95,17 @@ describe("thriftBinary (thrift.TBinaryProtocol)", () => {
     const structBytes = [0x0b, 0x00, 0x01, 0x00, 0x00, 0x00, 0x05, ...new TextEncoder().encode("hello"), 0x0c, 0x00, 0x02, 0x08, 0x00, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00];
     const framed = [0x00, 0x00, 0x00, structBytes.length, ...structBytes];
 
-    expect(decodeThriftBinaryBase64(toBase64(framed))?.value).toEqual({
+    expect(decodeThriftBinaryBase64(toBase64(framed))?.value).toBeUndefined();
+    expect(decodeThriftBinaryBase64(toBase64(framed), { allowRawStructSniff: true })?.value).toEqual({
+      "1": "hello",
+      "2": { "1": 7 },
+    });
+
+    // Raw (headerless) TSerializer structs are the same opt-in heuristic:
+    // without the flag the decoder returns null instead of guessing at
+    // arbitrary binary.
+    expect(decodeThriftBinaryBase64(toBase64(structBytes))?.value).toBeUndefined();
+    expect(decodeThriftBinaryBase64(toBase64(structBytes), { allowRawStructSniff: true })?.value).toEqual({
       "1": "hello",
       "2": { "1": 7 },
     });
@@ -106,10 +116,13 @@ describe("thriftBinary (thrift.TBinaryProtocol)", () => {
     const rawTextWithControls = String.fromCharCode(...rawBytes);
 
     expect(
-      formatMqMessagePayload({
-        payloadBase64: toBase64(rawBytes),
-        payloadText: rawTextWithControls,
-      }),
+      formatMqMessagePayload(
+        {
+          payloadBase64: toBase64(rawBytes),
+          payloadText: rawTextWithControls,
+        },
+        { allowRawStructSniff: true },
+      ),
     ).toBe('{\n  "1": "hello"\n}');
   });
 

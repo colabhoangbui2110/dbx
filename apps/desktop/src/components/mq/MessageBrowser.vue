@@ -136,7 +136,9 @@ function invalidateMessageRequest() {
 }
 
 function messagePayload(message: PeekedMessage): string {
-  return formatMqMessagePayload(message);
+  // Raw-struct thrift sniffing is opt-in per MQ kind: only RabbitMQ's payload
+  // contract is thrift, so Kafka/RocketMQ keep the base64/text fallback.
+  return formatMqMessagePayload(message, { allowRawStructSniff: props.mqSystemKind === "rabbitmq" });
 }
 
 async function copyMessagePayload(message: PeekedMessage) {

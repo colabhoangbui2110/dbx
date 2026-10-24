@@ -318,39 +318,49 @@ function decodeRawStruct(bytes: Uint8Array, depth = 0): Record<string, unknown> 
   return fields;
 }
 
-function decodeUnframed(bytes: Uint8Array): Record<string, unknown> {
-  if (bytes.length >= 4) {
-    const firstWord = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false);
-    if ((firstWord & THRIFT_VERSION_MASK) >>> 0 === THRIFT_VERSION_1) {
-      return decodeStrictMessage(bytes);
-    }
-  }
+function tryDecodeEnveloped(bytes: Uint8Array): Record<string, unknown> | null {
   try {
-    return decodeNonStrictMessage(bytes);
+    return decodeEnveloped(bytes);
   } catch {
-    return decodeRawStruct(bytes);
+    return null;
   }
 }
 
-export function decodeThriftBinary(bytes: Uint8Array): ThriftBinaryDecodeResult | null {
-  if (bytes.length === 0) return null;
+function tryDecodeFramed(bytes: Uint8Array, allowRawStruct: boolean): Record<string, unknown> | null {
+  if (bytes.length <= 4) return null;
+  const frameLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false);
+  if (frameLength === 0 || frameLength !== bytes.length - 4) return null;
+  const inner = bytes.subarray(4);
+  return tryDecodeEnveloped(inner) ?? (allowRawStruct ? tryDecodeRawStruct(inner) : null);
+}
+
+function tryDecodeRawStruct(bytes: Uint8Array): Record<string, unknown> | null {
   try {
-    const value = decodeUnframed(bytes);
-    return { formattedText: JSON.stringify(value, null, 2), value };
+    return decodeRawStruct(bytes);
   } catch {
-    if (bytes.length > 4) {
-      const frameLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false);
-      if (frameLength > 0 && frameLength === bytes.length - 4) {
-        try {
-          const value = decodeUnframed(bytes.subarray(4));
-          return { formattedText: JSON.stringify(value, null, 2), value };
-        } catch {
-          return null;
-        }
-      }
-    }
     return null;
   }
+}
+
+export function decodeThriftBinary(bytes: Uint8Array, options: { allowRawStructSniff?: boolean } = {}): ThriftBinaryDecodeResult | null {
+  if (bytes.length === 0) return null;
+  // Enveloped thrift messages carry an unambiguous header (strict version word
+  // or a 0x80 0x01 non-strict marker). A headerless payload only "decoding" as
+  // a raw struct is a heuristic that can misfire on arbitrary binary, so it is
+  // opt-in (RabbitMQ's payload contract) rather than applied to every MQ kind.
+  const enveloped = tryDecodeEnveloped(bytes) ?? tryDecodeFramed(bytes, options.allowRawStructSniff === true);
+  if (enveloped) return { formattedText: JSON.stringify(enveloped, null, 2), value: enveloped };
+  if (options.allowRawStructSniff !== true) return null;
+  const raw = tryDecodeRawStruct(bytes);
+  return raw ? { formattedText: JSON.stringify(raw, null, 2), value: raw } : null;
+}
+
+function decodeEnveloped(bytes: Uint8Array): Record<string, unknown> {
+  const firstWord = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false);
+  if (bytes.length >= 4 && (firstWord & THRIFT_VERSION_MASK) >>> 0 === THRIFT_VERSION_1) {
+    return decodeStrictMessage(bytes);
+  }
+  return decodeNonStrictMessage(bytes);
 }
 
 function base64ToBytes(base64: string): Uint8Array | null {
@@ -368,23 +378,23 @@ function base64ToBytes(base64: string): Uint8Array | null {
   }
 }
 
-export function decodeThriftBinaryBase64(base64?: string): ThriftBinaryDecodeResult | null {
+export function decodeThriftBinaryBase64(base64?: string, options: { allowRawStructSniff?: boolean } = {}): ThriftBinaryDecodeResult | null {
   if (!base64) return null;
   const bytes = base64ToBytes(base64);
   if (!bytes) return null;
-  return decodeThriftBinary(bytes);
+  return decodeThriftBinary(bytes, options);
 }
 
-export function formatMqMessagePayload(message: Pick<PeekedMessage, "payloadText" | "payloadBase64">): string {
+export function formatMqMessagePayload(message: Pick<PeekedMessage, "payloadText" | "payloadBase64">, options: { allowRawStructSniff?: boolean } = {}): string {
   if (message.payloadText !== undefined && message.payloadText !== "" && isPrintableText(message.payloadText)) {
     return message.payloadText;
   }
-  const decodedFromBase64 = decodeThriftBinaryBase64(message.payloadBase64);
+  const decodedFromBase64 = decodeThriftBinaryBase64(message.payloadBase64, options);
   if (decodedFromBase64) {
     return decodedFromBase64.formattedText;
   }
   if (message.payloadText) {
-    const decodedFromText = decodeThriftBinary(new TextEncoder().encode(message.payloadText));
+    const decodedFromText = decodeThriftBinary(new TextEncoder().encode(message.payloadText), options);
     if (decodedFromText) {
       return decodedFromText.formattedText;
     }

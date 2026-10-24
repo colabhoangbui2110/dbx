@@ -789,7 +789,7 @@ onBeforeUnmount(() => {
               <div v-if="Object.keys(message.properties).length" class="peek-properties">
                 <span v-for="(value, key) in message.properties" :key="key">{{ key }}={{ value }}</span>
               </div>
-              <pre class="peek-payload">{{ formatMqMessagePayload(message) }}</pre>
+              <pre class="peek-payload">{{ formatMqMessagePayload(message, { allowRawStructSniff: props.mqSystemKind === "rabbitmq" }) }}</pre>
             </div>
           </div>
         </div>
