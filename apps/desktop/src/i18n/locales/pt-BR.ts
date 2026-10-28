@@ -11553,6 +11553,7 @@ export default withEnglishFallback({
     resendMessage: "Reenviar",
     payloadCopied: "Copiado",
     dlqConsumerGroupPlaceholder: "Grupo de consumidores (opcional)",
+    decodePayload: "Decodificar",
   },
   mqMonitoring: {
     title: "Monitoramento",

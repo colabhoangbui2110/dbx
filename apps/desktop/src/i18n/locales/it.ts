@@ -11557,6 +11557,7 @@ export default withEnglishFallback({
     resendMessage: "Reinvia",
     payloadCopied: "Copiato",
     dlqConsumerGroupPlaceholder: "Gruppo di consumatori (opzionale)",
+    decodePayload: "Decodifica",
   },
   mqMonitoring: {
     title: "Monitoraggio",

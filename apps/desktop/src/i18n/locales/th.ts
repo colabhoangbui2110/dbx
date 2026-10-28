@@ -13132,6 +13132,7 @@ export default withEnglishFallback({
     resendMessage: "ส่งอีกครั้ง",
     payloadCopied: "คัดลอกแล้ว",
     dlqConsumerGroupPlaceholder: "Consumer Group (ไม่บังคับ)",
+    decodePayload: "ถอดรหัส",
   },
   mqMonitoring: {
     title: "การตรวจสอบ",

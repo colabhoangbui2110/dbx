@@ -11585,6 +11585,7 @@ export default withEnglishFallback({
     resendMessage: "再送信",
     payloadCopied: "コピーしました",
     dlqConsumerGroupPlaceholder: "コンシューマーグループ (オプション)",
+    decodePayload: "デコード",
   },
   mqMonitoring: {
     title: "モニタリング",
